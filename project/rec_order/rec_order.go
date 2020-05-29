@@ -409,15 +409,15 @@ func (rc *ReceivableContract) userCheck(ctx contractapi.TransactionContextInterf
 	return true, nil
 }
 
-// CreateRecOrder using user1(The Company) to create a receivable order
-func (rc *ReceivableContract) CreateRecOrder(ctx contractapi.TransactionContextInterface, userID, acceptorID string, amount int) (*RecOrder, error) {
-	// check userID is exist and the role is Company
-	ok, err := rc.userCheck(ctx, userID, Company)
+// CreateRecOrder using ownerID(the company) to create a receivable order
+func (rc *ReceivableContract) CreateRecOrder(ctx contractapi.TransactionContextInterface, ownerID, acceptorID string, amount int) (*RecOrder, error) {
+	// check ownerID is exist and the role is Company
+	ok, err := rc.userCheck(ctx, ownerID, Company)
 	if !ok {
 		return nil, err
 	}
 
-	// check userID is exist and the role is Supplier
+	// check acceptorID is exist and the role is Supplier
 	ok, err = rc.userCheck(ctx, acceptorID, Supplier)
 	if !ok {
 		return nil, err
@@ -435,7 +435,7 @@ func (rc *ReceivableContract) CreateRecOrder(ctx contractapi.TransactionContextI
 		OrderNo:      "order" + strconv.Itoa(orderCount),
 		GoodsNo:      "goods" + strconv.Itoa(orderCount),
 		ReceivableNo: "rec" + strconv.Itoa(orderCount),
-		OwnerID:      userID,
+		OwnerID:      ownerID,
 		AcceptorID:   acceptorID,
 		TotalAmount:  amount,
 	}
@@ -448,8 +448,8 @@ func (rc *ReceivableContract) CreateRecOrder(ctx contractapi.TransactionContextI
 	return order, nil
 }
 
-// SignReceivable using user2(First Supplier) to sign the receivable order
-func (rc *ReceivableContract) SignReceivable(ctx contractapi.TransactionContextInterface, orderNo, supplierID string, discountApplyAmount int) (*Receivable, error) {
+// SignReceivable using supplier(the acceptor in recOrder) to sign the receivable
+func (rc *ReceivableContract) SignReceivable(ctx contractapi.TransactionContextInterface, supplierID, orderNo string, discountApplyAmount int) (*Receivable, error) {
 	// First query the receivable order by order number
 	order, err := rc.QueryRecOrder(ctx, orderNo)
 	if err != nil {
@@ -502,10 +502,10 @@ func (rc *ReceivableContract) SignReceivable(ctx contractapi.TransactionContextI
 	return rec, nil
 }
 
-// AcceptRecOrder using user1(The Company) to accept the receivable
-func (rc *ReceivableContract) AcceptReceivable(ctx contractapi.TransactionContextInterface, userID, receivableNo string) (*Receivable, error) {
-	// Check userID is Company
-	if ok, err := rc.userCheck(ctx, userID, Company); !ok {
+// AcceptReceivable using company to accept the receivable
+func (rc *ReceivableContract) AcceptReceivable(ctx contractapi.TransactionContextInterface, companyID, receivableNo string) (*Receivable, error) {
+	// Check companyID is Company
+	if ok, err := rc.userCheck(ctx, companyID, Company); !ok {
 		return nil, err
 	}
 
@@ -529,8 +529,8 @@ func (rc *ReceivableContract) AcceptReceivable(ctx contractapi.TransactionContex
 	return rec, nil
 }
 
-// TransferReceivable transfers receivable from current acceptor(usually the First Supplier) to another acceptor(usually the Second Supplier)
-func (rc *ReceivableContract) TransferReceivable(ctx contractapi.TransactionContextInterface, recNo, ownerID, supplierID string) (*Receivable, error) {
+// TransferReceivable transfers receivable from supplierID1(current owner) to supplierID2
+func (rc *ReceivableContract) TransferReceivable(ctx contractapi.TransactionContextInterface, supplierID1, supplierID2, recNo string) (*Receivable, error) {
 	// First query the receivable by receivable number
 	rec, err := rc.QueryReceivable(ctx, recNo)
 	if err != nil {
@@ -543,22 +543,22 @@ func (rc *ReceivableContract) TransferReceivable(ctx contractapi.TransactionCont
 	}
 
 	// Check the owner
-	if ok, err := rc.userCheck(ctx, ownerID, Supplier); !ok {
+	if ok, err := rc.userCheck(ctx, supplierID1, Supplier); !ok {
 		return nil, err
 	}
 
 	// Check the supplier
-	if ok, err := rc.userCheck(ctx, supplierID, Supplier); !ok {
+	if ok, err := rc.userCheck(ctx, supplierID2, Supplier); !ok {
 		return nil, err
 	}
 
 	// Check the rec.Owner
-	if rec.OwnerID != ownerID {
-		return nil, fmt.Errorf("user %s is not the owner of receivable %s, can't TransferReceivable", ownerID, recNo)
+	if rec.OwnerID != supplierID1 {
+		return nil, fmt.Errorf("user %s is not the owner of receivable %s, can't TransferReceivable", supplierID1, recNo)
 	}
 
 	// Transfer the receivable, modify its acceptor
-	rec.OwnerID = supplierID
+	rec.OwnerID = supplierID2
 	recBytes, _ := json.Marshal(rec)
 	err = ctx.GetStub().PutState(rec.ReceivableNo, recBytes)
 	if err != nil {
@@ -567,8 +567,8 @@ func (rc *ReceivableContract) TransferReceivable(ctx contractapi.TransactionCont
 	return rec, nil
 }
 
-// ApplyDiscount is used by receivable acceptor(usually the Supplier) to apply discount from the financial organization
-func (rc *ReceivableContract) ApplyDiscount(ctx contractapi.TransactionContextInterface, recNo, ownerID, financialID string) (*Receivable, error) {
+// ApplyDiscount is used by receivable owner to apply discount from the financial organization
+func (rc *ReceivableContract) ApplyDiscount(ctx contractapi.TransactionContextInterface, ownerID, financialID, recNo string) (*Receivable, error) {
 	// First query the receivable by receivable number
 	rec, err := rc.QueryReceivable(ctx, recNo)
 	if err != nil {
@@ -606,7 +606,8 @@ func (rc *ReceivableContract) ApplyDiscount(ctx contractapi.TransactionContextIn
 	return rec, nil
 }
 
-func (rc *ReceivableContract) DiscountConfirm(ctx contractapi.TransactionContextInterface, recNo, financialID string) (*Receivable, error) {
+// DiscountConfirm is used by the financial organization to confirm the receivable
+func (rc *ReceivableContract) DiscountConfirm(ctx contractapi.TransactionContextInterface, financialID, recNo string) (*Receivable, error) {
 	// First query the receivable by receivable number
 	rec, err := rc.QueryReceivable(ctx, recNo)
 	if err != nil {
@@ -634,7 +635,8 @@ func (rc *ReceivableContract) DiscountConfirm(ctx contractapi.TransactionContext
 	return rec, nil
 }
 
-func (rc *ReceivableContract) Redeemed(ctx contractapi.TransactionContextInterface, recNo, companyID string) (*Receivable, error) {
+// Redeemed is used by the company to pay the account
+func (rc *ReceivableContract) Redeemed(ctx contractapi.TransactionContextInterface, companyID, recNo string) (*Receivable, error) {
 	// First query the receivable by receivable number
 	rec, err := rc.QueryReceivable(ctx, recNo)
 	if err != nil {

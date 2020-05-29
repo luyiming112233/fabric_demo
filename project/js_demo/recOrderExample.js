@@ -51,32 +51,37 @@ async function test() {
     let financial = "user4"
 
     console.log("The company is creating a receivable order...");
-    let newOrder = await invoke("CreateRecOrder", "500000");
+    let newOrder = await invoke("CreateRecOrder", company, firstSupplier, 500000);
     console.log(newOrder);
     console.log('========================================================================')
 
     console.log("The first supplier is signing the receivable order...")
-    let signedOrder = await invoke("SignRecOrder", newOrder.order_no, firstSupplier);
-    console.log(signedOrder);
+    let rec = await invoke("SignReceivable", firstSupplier, newOrder.order_no, 499999);
+    console.log(rec);
     console.log('========================================================================')
 
     console.log("The company is accepting the receivable...")
-    let rec = await invoke("AcceptRecOrder", signedOrder.order_no, 499999);
+    let rec = await invoke("AcceptReceivable", company, rec.receivable_no);
     console.log(rec);
     console.log('========================================================================')
 
     console.log("The first supplier is transferring the receivable...")
-    rec = await invoke("TransferReceivable", rec.receivable_no, secondSupplier)
+    rec = await invoke("TransferReceivable",  firstSupplier, secondSupplier, rec.receivable_no,)
     console.log(rec);
     console.log('========================================================================')
 
     console.log("The second supplier is applying for a discount from the financial...")
-    rec = await invoke("ApplyDiscount", rec.receivable_no, financial);
+    rec = await invoke("ApplyDiscount", secondSupplier, financial, rec.receivable_no);
     console.log(rec);
     console.log('========================================================================')
 
     console.log("The financial is confirming discount application from the second supplier...")
-    rec = await invoke("ConfirmDiscountApplication", rec.order_no, financial);
+    rec = await invoke("DiscountConfirm", financial, rec.order_no);
+    console.log(rec);
+    console.log('========================================================================')
+
+    console.log("The company is paying the account of receivable...")
+    rec = await invoke("Redeemed", company, rec.order_no);
     console.log(rec);
 
     console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ End Test ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
