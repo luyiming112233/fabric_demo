@@ -61,7 +61,7 @@ async function test() {
     console.log('========================================================================')
 
     console.log("The company is accepting the receivable...")
-    let rec = await invoke("AcceptReceivable", company, rec.receivable_no);
+    rec = await invoke("AcceptReceivable", company, rec.receivable_no);
     console.log(rec);
     console.log('========================================================================')
 
@@ -76,12 +76,12 @@ async function test() {
     console.log('========================================================================')
 
     console.log("The financial is confirming discount application from the second supplier...")
-    rec = await invoke("DiscountConfirm", financial, rec.order_no);
+    rec = await invoke("DiscountConfirm", financial, rec.receivable_no);
     console.log(rec);
     console.log('========================================================================')
 
     console.log("The company is paying the account of receivable...")
-    rec = await invoke("Redeemed", company, rec.order_no);
+    rec = await invoke("Redeemed", company, rec.receivable_no);
     console.log(rec);
 
     console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ End Test ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
