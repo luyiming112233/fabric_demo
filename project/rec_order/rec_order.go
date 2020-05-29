@@ -29,8 +29,7 @@ const (
 	Accepted       = "Accepted"
 	ToBeDiscounted = "To Be Discounted"
 	Discounted     = "Discounted"
-	Paid           = "Paid"
-	Expired        = "Expired"
+	Redeemed       = "Redeemed"
 )
 
 type Account struct {
@@ -46,10 +45,9 @@ type RecOrder struct {
 	OrderNo      string `json:"order_no"`
 	GoodsNo      string `json:"goods_no"`
 	ReceivableNo string `json:"receivable_no"`
-	SingerID     string `json:"singer_id"`
+	OwnerID      string `json:"owner_id"`
 	AcceptorID   string `json:"acceptor_id"`
 	TotalAmount  int    `json:"total_amount"`
-	Status       string `json:"status"`
 }
 
 type Receivable struct {
@@ -57,7 +55,7 @@ type Receivable struct {
 	OrderNo             string `json:"order_no"`
 	SignedTime          string `json:"signed_time"`
 	ExpireTime          string `json:"expire_time"`
-	SingerID            string `json:"singer_id"`
+	OwnerID             string `json:"owner_id"`
 	AcceptorID          string `json:"acceptor_id"`
 	DiscountApplyAmount int    `json:"discount_apply_amount"`
 	Status              string `json:"status"`
@@ -113,55 +111,49 @@ func (rc *ReceivableContract) InitLedger(ctx contractapi.TransactionContextInter
 			OrderNo:      "order1",
 			GoodsNo:      "goods1",
 			ReceivableNo: "rec1",
-			SingerID:     "user2",
+			OwnerID:      "user2",
 			AcceptorID:   "user1",
 			TotalAmount:  1000000,
-			Status:       ToBeAccepted,
 		},
 		{
 			OrderNo:      "order2",
 			GoodsNo:      "goods2",
 			ReceivableNo: "rec2",
-			SingerID:     "user2",
+			OwnerID:      "user2",
 			AcceptorID:   "user1",
 			TotalAmount:  1000000,
-			Status:       Accepted,
 		},
 		{
 			OrderNo:      "order3",
 			GoodsNo:      "goods3",
 			ReceivableNo: "rec3",
-			SingerID:     "user2",
+			OwnerID:      "user2",
 			AcceptorID:   "user1",
 			TotalAmount:  1000000,
-			Status:       Paid,
 		},
 		{
 			OrderNo:      "order4",
 			GoodsNo:      "goods4",
 			ReceivableNo: "rec4",
-			SingerID:     "user2",
+			OwnerID:      "user2",
 			AcceptorID:   "user1",
 			TotalAmount:  500000,
-			Status:       ToBeDiscounted,
 		},
 		{
 			OrderNo:      "order5",
 			GoodsNo:      "goods5",
 			ReceivableNo: "rec5",
-			SingerID:     "user2",
+			OwnerID:      "user2",
 			AcceptorID:   "user1",
 			TotalAmount:  500000,
-			Status:       Discounted,
 		},
 		{
 			OrderNo:      "order6",
 			GoodsNo:      "goods6",
 			ReceivableNo: "rec6",
-			SingerID:     "user2",
+			OwnerID:      "user2",
 			AcceptorID:   "user1",
 			TotalAmount:  500000,
-			Status:       Expired,
 		},
 	}
 
@@ -171,7 +163,7 @@ func (rc *ReceivableContract) InitLedger(ctx contractapi.TransactionContextInter
 			OrderNo:             "order2",
 			SignedTime:          "2020-05-27 15:04:05",
 			ExpireTime:          "2021-05-27 15:04:05",
-			SingerID:            "user1",
+			OwnerID:             "user1",
 			AcceptorID:          "user2",
 			DiscountApplyAmount: 1000000,
 			Status:              Accepted,
@@ -181,17 +173,16 @@ func (rc *ReceivableContract) InitLedger(ctx contractapi.TransactionContextInter
 			OrderNo:             "order3",
 			SignedTime:          "2020-05-27 15:04:05",
 			ExpireTime:          "2021-05-27 15:04:05",
-			SingerID:            "user1",
+			OwnerID:             "user1",
 			AcceptorID:          "user4",
 			DiscountApplyAmount: 1000000,
-			Status:              Paid,
 		},
 		{
 			ReceivableNo:        "rec4",
 			OrderNo:             "order4",
 			SignedTime:          "2020-05-27 15:04:05",
 			ExpireTime:          "2021-05-27 15:04:05",
-			SingerID:            "user1",
+			OwnerID:             "user1",
 			AcceptorID:          "user2",
 			DiscountApplyAmount: 500000,
 			Status:              ToBeDiscounted,
@@ -201,7 +192,7 @@ func (rc *ReceivableContract) InitLedger(ctx contractapi.TransactionContextInter
 			OrderNo:             "order5",
 			SignedTime:          "2020-05-27 15:04:05",
 			ExpireTime:          "2021-05-27 15:04:05",
-			SingerID:            "user1",
+			OwnerID:             "user1",
 			AcceptorID:          "user4",
 			DiscountApplyAmount: 500000,
 			Status:              Discounted,
@@ -211,10 +202,9 @@ func (rc *ReceivableContract) InitLedger(ctx contractapi.TransactionContextInter
 			OrderNo:             "order6",
 			SignedTime:          "2020-05-27 15:04:05",
 			ExpireTime:          "2020-05-28 15:04:05",
-			SingerID:            "user1",
+			OwnerID:             "user1",
 			AcceptorID:          "user3",
 			DiscountApplyAmount: 500000,
-			Status:              Expired,
 		},
 	}
 
@@ -420,7 +410,19 @@ func (rc *ReceivableContract) userCheck(ctx contractapi.TransactionContextInterf
 }
 
 // CreateRecOrder using user1(The Company) to create a receivable order
-func (rc *ReceivableContract) CreateRecOrder(ctx contractapi.TransactionContextInterface, amount int) (*RecOrder, error) {
+func (rc *ReceivableContract) CreateRecOrder(ctx contractapi.TransactionContextInterface, userID, acceptorID string, amount int) (*RecOrder, error) {
+	// check userID is exist and the role is Company
+	ok, err := rc.userCheck(ctx, userID, Company)
+	if !ok {
+		return nil, err
+	}
+
+	// check userID is exist and the role is Supplier
+	ok, err = rc.userCheck(ctx, acceptorID, Supplier)
+	if !ok {
+		return nil, err
+	}
+
 	// First query all the receivable orders in order to determine the order number
 	allOrders, err := rc.QueryAllRecOrders(ctx)
 	if err != nil {
@@ -428,14 +430,14 @@ func (rc *ReceivableContract) CreateRecOrder(ctx contractapi.TransactionContextI
 	}
 	orderCount := len(allOrders)
 	orderCount++
+	// OwnerID is Company, AcceptorID is Supplier
 	order := &RecOrder{
 		OrderNo:      "order" + strconv.Itoa(orderCount),
 		GoodsNo:      "goods" + strconv.Itoa(orderCount),
 		ReceivableNo: "rec" + strconv.Itoa(orderCount),
-		SingerID:     "",
-		AcceptorID:   "user1",
+		OwnerID:      userID,
+		AcceptorID:   acceptorID,
 		TotalAmount:  amount,
-		Status:       ToBeAccepted,
 	}
 
 	dataBytes, _ := json.Marshal(order)
@@ -446,8 +448,8 @@ func (rc *ReceivableContract) CreateRecOrder(ctx contractapi.TransactionContextI
 	return order, nil
 }
 
-// SignRecOrder using user2(First Supplier) to sign the receivable order
-func (rc *ReceivableContract) SignRecOrder(ctx contractapi.TransactionContextInterface, orderNo, supplierID string) (*RecOrder, error) {
+// SignReceivable using user2(First Supplier) to sign the receivable order
+func (rc *ReceivableContract) SignReceivable(ctx contractapi.TransactionContextInterface, orderNo, supplierID string, discountApplyAmount int) (*Receivable, error) {
 	// First query the receivable order by order number
 	order, err := rc.QueryRecOrder(ctx, orderNo)
 	if err != nil {
@@ -455,7 +457,7 @@ func (rc *ReceivableContract) SignRecOrder(ctx contractapi.TransactionContextInt
 	}
 
 	// Then check the acceptor
-	ok, err := rc.userCheck(ctx, order.AcceptorID, Company)
+	ok, err := rc.userCheck(ctx, order.OwnerID, Company)
 	if !ok {
 		return nil, err
 	}
@@ -466,35 +468,19 @@ func (rc *ReceivableContract) SignRecOrder(ctx contractapi.TransactionContextInt
 		return nil, err
 	}
 
-	// Sign the order
-	order.SingerID = supplierID
-	dataBytes, _ := json.Marshal(order)
-	err = ctx.GetStub().PutState(order.OrderNo, dataBytes)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
-}
-
-// AcceptRecOrder using user1(The Company) to accept the receivable
-func (rc *ReceivableContract) AcceptRecOrder(ctx contractapi.TransactionContextInterface, orderNo string, discount int) (*Receivable, error) {
-	// First query the receivable order by order number
-	order, err := rc.QueryRecOrder(ctx, orderNo)
-	if err != nil {
-		return nil, err
+	// Check supplier is order.AcceptorID
+	if supplierID != order.AcceptorID {
+		return nil, fmt.Errorf("the supplierID %s is not equal with the AcceptorID %s in order", supplierID, order.AcceptorID)
 	}
 
-	// Then accept the receivable
-	order.Status = Accepted
-	orderBytes, _ := json.Marshal(order)
-	err = ctx.GetStub().PutState(order.OrderNo, orderBytes)
-	if err != nil {
-		return nil, err
+	// Check receivable whick the receivableNo is order.ReceivableNo is not exist
+	if r, _ := rc.QueryReceivable(ctx, order.ReceivableNo); r != nil {
+		return nil, fmt.Errorf("the Receivable which the receivableNo is %s exist", order.ReceivableNo)
 	}
 
-	// If the discount apply amount is larger than total amount, drop it
-	if discount > order.TotalAmount {
-		return nil, fmt.Errorf("discount apply amount is larger than receivable order's total amount")
+	// Check discountApplyAmount is less than or equal to order.TotalAmount
+	if discountApplyAmount > order.TotalAmount {
+		return nil, fmt.Errorf("discountApplyAmount %d is greater than totalAmount %d", discountApplyAmount, order.TotalAmount)
 	}
 
 	// Create the receivable proof
@@ -503,11 +489,38 @@ func (rc *ReceivableContract) AcceptRecOrder(ctx contractapi.TransactionContextI
 		OrderNo:             order.OrderNo,
 		SignedTime:          time.Now().Format("2006-01-02 15:04:05"),
 		ExpireTime:          time.Now().AddDate(1, 0, 0).Format("2006-01-02 15:04:05"),
-		SingerID:            "user1",
-		AcceptorID:          order.SingerID,
-		DiscountApplyAmount: discount,
-		Status:              Accepted,
+		OwnerID:             supplierID,
+		AcceptorID:          order.OwnerID,
+		DiscountApplyAmount: discountApplyAmount,
+		Status:              ToBeAccepted,
 	}
+	recBytes, _ := json.Marshal(rec)
+	err = ctx.GetStub().PutState(rec.ReceivableNo, recBytes)
+	if err != nil {
+		return nil, err
+	}
+	return rec, nil
+}
+
+// AcceptRecOrder using user1(The Company) to accept the receivable
+func (rc *ReceivableContract) AcceptReceivable(ctx contractapi.TransactionContextInterface, userID, receivableNo string) (*Receivable, error) {
+	// Check userID is Company
+	if ok, err := rc.userCheck(ctx, userID, Company); !ok {
+		return nil, err
+	}
+
+	// Query the receivable by receivable number
+	rec, err := rc.QueryReceivable(ctx, receivableNo)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check the receivable's status is ToBeAccepted
+	if ok, err := rc.receivableStatusCheck(rec, ToBeAccepted); !ok {
+		return nil, err
+	}
+
+	rec.Status = Accepted
 	recBytes, _ := json.Marshal(rec)
 	err = ctx.GetStub().PutState(rec.ReceivableNo, recBytes)
 	if err != nil {
@@ -517,26 +530,35 @@ func (rc *ReceivableContract) AcceptRecOrder(ctx contractapi.TransactionContextI
 }
 
 // TransferReceivable transfers receivable from current acceptor(usually the First Supplier) to another acceptor(usually the Second Supplier)
-func (rc *ReceivableContract) TransferReceivable(ctx contractapi.TransactionContextInterface, recNo, supplierID string) (*Receivable, error) {
+func (rc *ReceivableContract) TransferReceivable(ctx contractapi.TransactionContextInterface, recNo, ownerID, supplierID string) (*Receivable, error) {
 	// First query the receivable by receivable number
 	rec, err := rc.QueryReceivable(ctx, recNo)
 	if err != nil {
 		return nil, err
 	}
-	
-	// Check the receivable status
-	if rec.Status != Accepted {
-		return nil, fmt.Errorf("the receivable is not accepted")
-	}
 
-	// Check the supplier
-	ok, err := rc.userCheck(ctx, supplierID, Supplier)
-	if !ok {
+	// Check the receivable's status is Accepted
+	if ok, err := rc.receivableStatusCheck(rec, Accepted); !ok {
 		return nil, err
 	}
 
+	// Check the owner
+	if ok, err := rc.userCheck(ctx, ownerID, Supplier); !ok {
+		return nil, err
+	}
+
+	// Check the supplier
+	if ok, err := rc.userCheck(ctx, supplierID, Supplier); !ok {
+		return nil, err
+	}
+
+	// Check the rec.Owner
+	if rec.OwnerID != ownerID {
+		return nil, fmt.Errorf("user %s is not the owner of receivable %s, can't TransferReceivable", ownerID, recNo)
+	}
+
 	// Transfer the receivable, modify its acceptor
-	rec.AcceptorID = supplierID
+	rec.OwnerID = supplierID
 	recBytes, _ := json.Marshal(rec)
 	err = ctx.GetStub().PutState(rec.ReceivableNo, recBytes)
 	if err != nil {
@@ -546,7 +568,7 @@ func (rc *ReceivableContract) TransferReceivable(ctx contractapi.TransactionCont
 }
 
 // ApplyDiscount is used by receivable acceptor(usually the Supplier) to apply discount from the financial organization
-func (rc *ReceivableContract) ApplyDiscount(ctx contractapi.TransactionContextInterface, recNo, financialID string) (*Receivable, error) {
+func (rc *ReceivableContract) ApplyDiscount(ctx contractapi.TransactionContextInterface, recNo, ownerID, financialID string) (*Receivable, error) {
 	// First query the receivable by receivable number
 	rec, err := rc.QueryReceivable(ctx, recNo)
 	if err != nil {
@@ -554,14 +576,23 @@ func (rc *ReceivableContract) ApplyDiscount(ctx contractapi.TransactionContextIn
 	}
 
 	// Check the receivable status
-	if rec.Status != Accepted {
-		return nil, fmt.Errorf("the receivable is not accepted")
+	if ok, err := rc.receivableStatusCheck(rec, Accepted); !ok {
+		return nil, err
+	}
+
+	// Check the owner
+	if ok, err := rc.userCheck(ctx, ownerID, Supplier); !ok {
+		return nil, err
 	}
 
 	// Check the financial
-	ok, err := rc.userCheck(ctx, financialID, Financial)
-	if !ok {
+	if ok, err := rc.userCheck(ctx, financialID, Financial); !ok {
 		return nil, err
+	}
+
+	// Check the rec.Owner
+	if rec.OwnerID != ownerID {
+		return nil, fmt.Errorf("user %s is not the owner of receivable %s, can't ApplyDiscount", ownerID, recNo)
 	}
 
 	// Apply for discount
@@ -572,11 +603,30 @@ func (rc *ReceivableContract) ApplyDiscount(ctx contractapi.TransactionContextIn
 		return nil, err
 	}
 
-	// Make sure the order is updated consistently
-	order, err := rc.QueryRecOrder(ctx, rec.OrderNo)
-	order.Status = ToBeDiscounted
-	orderBytes, _ := json.Marshal(order)
-	err = ctx.GetStub().PutState(order.OrderNo, orderBytes)
+	return rec, nil
+}
+
+func (rc *ReceivableContract) DiscountConfirm(ctx contractapi.TransactionContextInterface, recNo, financialID string) (*Receivable, error) {
+	// First query the receivable by receivable number
+	rec, err := rc.QueryReceivable(ctx, recNo)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check the financial
+	if ok, err := rc.userCheck(ctx, financialID, Financial); !ok {
+		return nil, err
+	}
+
+	// Check the receivable status
+	if ok, err := rc.receivableStatusCheck(rec, ToBeDiscounted); !ok {
+		return nil, err
+	}
+
+	rec.Status = Discounted
+	rec.OwnerID = financialID
+	recBytes, _ := json.Marshal(rec)
+	err = ctx.GetStub().PutState(rec.ReceivableNo, recBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -584,65 +634,46 @@ func (rc *ReceivableContract) ApplyDiscount(ctx contractapi.TransactionContextIn
 	return rec, nil
 }
 
-func (rc *ReceivableContract) ConfirmDiscountApplication(ctx contractapi.TransactionContextInterface, orderNo, financialID string) (*Receivable, error) {
-	// First query the receivable order by order number
-	order, err := rc.QueryRecOrder(ctx, orderNo)
+func (rc *ReceivableContract) Redeemed(ctx contractapi.TransactionContextInterface, recNo, companyID string) (*Receivable, error) {
+	// First query the receivable by receivable number
+	rec, err := rc.QueryReceivable(ctx, recNo)
 	if err != nil {
+		return nil, err
+	}
+
+	// Check the company
+	if ok, err := rc.userCheck(ctx, companyID, Company); !ok {
 		return nil, err
 	}
 
 	// Check the receivable status
-	if order.Status != ToBeDiscounted {
-		return nil, fmt.Errorf("the receivable has not been applied for discount yet")
-	}
-
-	// Check the receivable's signer(also the receivable order acceptor)
-	ok, err := rc.userCheck(ctx, order.AcceptorID, Company)
-	if !ok {
+	if ok, err := rc.receivableStatusCheck(rec, Discounted); !ok {
 		return nil, err
 	}
 
-	// Check the receivable order's signer
-	ok, err = rc.userCheck(ctx, order.SingerID, Supplier)
-	if !ok {
-		return nil, err
+	// Check company is the acceptor
+	if rec.AcceptorID != companyID {
+		return nil, fmt.Errorf("user %s is not the acceptorID of receivable %s, can't Redeemed", companyID, rec.AcceptorID)
 	}
 
-	// Query for the receivable
-	rec, err := rc.QueryReceivable(ctx, order.ReceivableNo)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check the receivable's acceptor(the receivable is possibly transferred, so the acceptor can be another supplier)
-	ok, err = rc.userCheck(ctx, rec.AcceptorID, Supplier)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check the financial that is going to be the receivable's acceptor
-	ok, err = rc.userCheck(ctx, financialID, Financial)
-	if err != nil {
-		return nil, err
-	}
-
-	// Now do the discount
-	rec.Status = Discounted
-	rec.AcceptorID = financialID
+	rec.Status = Redeemed
+	rec.OwnerID = companyID
 	recBytes, _ := json.Marshal(rec)
 	err = ctx.GetStub().PutState(rec.ReceivableNo, recBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	order.Status = Discounted
-	orderBytes, _ := json.Marshal(order)
-	err = ctx.GetStub().PutState(order.OrderNo, orderBytes)
-	if err != nil {
-		return nil, err
+	return rec, nil
+}
+
+func (rc *ReceivableContract) receivableStatusCheck(rec *Receivable, status string) (bool, error) {
+	// Check the receivable's status
+	if rec.Status != status {
+		return false, fmt.Errorf("the receivable's status is %s while %s is needed", rec.Status, status)
 	}
 
-	return rec, nil
+	return true, nil
 }
 
 func main() {
